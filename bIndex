@@ -1,0 +1,140 @@
+import styles from "@/assets/styles/pages/build.module.css";
+import ListCard from "@/components/list-card";
+import Modal from "@/components/utility/modal";
+import { useAlertContext } from "@/context/alert-context";
+import { useAuth } from "@/hooks/use-auth";
+import { useTitle } from "@/hooks/use-title";
+import BuildFilter from "@/pages/private/builds/build-filter";
+import ImageBuilder from "@/pages/private/builds/image-builder";
+import Logs from "@/pages/private/builds/build-logs";
+import ApiService from "@/shared/api-service";
+import { getApiURL, getUserType, uniqueId } from "@/shared/utils";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Fragment, useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import CardBuild from "../../../components/utility/cardBuild";
+
+function Builds() {
+  useTitle("Build Images");
+  const queryClient = useQueryClient();
+  const { setAlert } = useAlertContext();
+  const {
+    projectName,
+    user: { platform }
+  } = useAuth();
+  const [open, setOpen] = useState<boolean>(false);
+  const [modalType, setModalType] = useState<"build" | "logs">("build");
+  const [build, setBuild] = useState<Build | undefined>(undefined);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [buildId, setBuildId] = useState("");
+
+  const { data: builds, isLoading } = useQuery({
+    queryKey: ["builder", searchParams.get("type"), projectName, "build_type"],
+    queryFn: fetchBuilds
+  });
+
+
+
+  async function fetchBuilds(): Promise<Build[] | undefined> {
+    try {
+      const queryParams: QueryParams = {
+        project_id: projectName
+      };
+      const buildType = searchParams.get("type")?.includes("VDI") ? "cnv" : "ide";
+      queryParams.build_type = searchParams.get("type")?.includes("Prebuild") ? "default" : "custom";
+      const url =
+        getUserType() === "ADMIN"
+          ? buildType === "cnv"
+            ? `builder/cnv/images?build_type=${queryParams.build_type}`
+            : `builder?build_type=${queryParams.build_type}`
+          : getApiURL("builds", queryParams, buildType);
+
+      if (!searchParams.get("type")?.includes("IDE") && !searchParams.get("type")?.includes("VDI")) return [];
+
+      const res = await ApiService.getData<Build[]>(url);
+      console.log(res);
+
+
+      if (searchParams.get("type") === "Prebuild-VDI-Images") {
+        return res.body.map(b => ({ ...b, id: b.id + uniqueId("-", 3) }));
+      }
+      return res.body || ([] as Build[]);
+    } catch (err: any) {
+      setAlert((err as ApiError).message);
+      return [];
+    }
+  }
+
+  async function deleteBuild(id: string, setLoading: (flag: boolean) => void): Promise<void> {
+    let url = `builder/${id}`;
+    try {
+      if (searchParams.get("type")?.toLowerCase()?.includes("vdi")) {
+        url = `builder/cnv/images/${builds?.filter(b => b.id === id)[0].name}?project_id=${projectName}`;
+      }
+      const res = await ApiService.deleteData<Build>(url);
+      queryClient.invalidateQueries({ queryKey: ["builder"] });
+      logsHandler(id);
+      setAlert(res.message, { type: "success" });
+    } catch (err) {
+      setAlert((err as ApiError).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function updateBuild(id: string): void {
+    setBuild(() => builds?.find(build => build.id === id));
+    setModalType("build");
+    setOpen(true);
+    logsHandler(id);
+  }
+
+  function logsHandler(buildId: string): void {
+    setBuildId(buildId);
+    setModalType("logs");
+    setOpen(true);
+  }
+
+  useEffect(() => {
+    if (!searchParams.get("type") && platform === "k8s") {
+      setSearchParams("type=Custom-IDE-Images");
+    } else if (!searchParams.get("type") && platform === "openshift") {
+      setSearchParams("type=Custom-VDI-Images");
+    }
+  }, []);
+
+  return (
+    <Fragment>
+      <BuildFilter setImageBuild={setBuild} setModalType={setModalType} setOpen={setOpen} length={builds?.length} />
+
+      {/* <ListCard
+        isLoading={isLoading}
+        data={builds!}
+        remove={
+          ["Custom-IDE-Images", "Custom-VDI-Images"].includes(searchParams.get("type")!) ? deleteBuild : undefined
+        }
+        build={searchParams.get("type") === "Custom-IDE-Images" ? updateBuild : undefined}
+        logs={["Custom-IDE-Images"].includes(searchParams.get("type")!) ? logsHandler : undefined}
+        message={"No Build Images Found."}
+      /> */}
+      <CardBuild
+         isLoading={isLoading}
+         data={builds!}
+         remove={
+           ["Custom-IDE-Images", "Custom-VDI-Images"].includes(searchParams.get("type")!) ? deleteBuild : undefined
+         }
+         build={searchParams.get("type") === "Custom-IDE-Images" ? updateBuild : undefined}
+         logs={["Custom-IDE-Images"].includes(searchParams.get("type")!) ? logsHandler : undefined}
+         message={"No Build Images Found."}
+      />
+
+
+      <Modal open={open} close={setOpen} className={styles.mw100}>
+        {modalType === "build" && <ImageBuilder onClose={() => setOpen(false)} build={build} />}
+        {modalType === "logs" && <Logs id={buildId} projectName={projectName} close={setOpen} />}
+      </Modal>
+    </Fragment>
+  );
+}
+
+export default Builds;
