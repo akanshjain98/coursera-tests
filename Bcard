@@ -1,70 +1,3 @@
-import styles from "@/assets/styles/components/list-card.module.css";
-import Loader from "@/components/utility/loader";
-import Pill from "@/components/utility/pill";
-import { useAuth } from "@/hooks/use-auth";
-import { CircularProgress } from "@mui/material";
-import { useState } from "react";
-import { Link, useLocation } from "react-router-dom";
-import NoData from "../no-data";
-// import NoData from "./no-data";
-
-type ModalType = "schedule" | "logs" | "share" | "";
-
-interface ListCardProps extends Props {
-  isLoading: boolean;
-  data: Item[];
-  message?: string;
-  details?: boolean;
-  update?: boolean;
-  defaultActiveCard?: string;
-  statusChange?: (
-    id: string,
-    status: "Ready" | "Not Ready" | "Failed" | "Starting" | "Stopping" | "Provisioning"
-  ) => void;
-  build?: (build_id: string) => void;
-  logs?: (id: string, modalType: ModalType) => void;
-  schedule?: (item: Workspace) => void;
-  remove?: (id: string, setLoading: (flag: boolean) => void) => void;
-  share?: (id: string) => void;
-}
-
-interface Item {
-  id: string;
-  name: string;
-  [key: string]: any;
-}
-
-const statusType = {
-  Ready: "success",
-  Complete: "success",
-  Progressing: "primary",
-  Failed: "danger",
-  Stopping: "warning",
-  Provisioning: "primary",
-  Starting: "success",
-  Succeeded: "success",
-  "Not Ready": "warning",
-  "Not Found": "danger",
-  "Build Failed": "danger",
-  "Build In-Progress": "primary",
-  "Build Successful": "success"
-};
-const statusLabel = {
-  Ready: "running",
-  Starting: "starting",
-  Complete: "completed",
-  Progressing: "in-progress",
-  Failed: "failed",
-  Stopping: "stopping",
-  Succeeded: "completed",
-  Provisioning: "provisioning",
-  "Not Ready": "stopped",
-  "Not Found": "not-found",
-  "Build Failed": "build failed",
-  "Build In-Progress": "in-progress",
-  "Build Successful": "completed"
-};
-
 function CardBuild({
   isLoading,
   data,
@@ -79,210 +12,54 @@ function CardBuild({
   schedule,
   share
 }: ListCardProps) {
-  const { pathname } = useLocation();
-  const [activeItem, setActiveItem] = useState<string>(defaultActiveCard || "");
-  const [loading, setLoading] = useState(false);
-  const { user } = useAuth();
-  const isLead: boolean = user?.permissions?.DevOps_Lead?.length > 0;
-
-  function showDetails(id: string): void {
-    if (activeItem && activeItem === id) setActiveItem("");
-    if ((activeItem && activeItem !== id) || !activeItem) setActiveItem(id);
-  }
-
-  function renderItem(item: Item) {
-    return Object.entries(item)
-      .filter(([k]) => k !== "name" && k !== "id" && k !== "template_id")
-      .map(([key, value]) =>
-        !(!value && value !== false) ? (
-          <div key={key}>
-            <span className="text-danger fw-bold text-capitalize">
-              {key === "id" ? "ID" : key.replace(/[_]+/gi, " ")}
-              {": "}
-            </span>
-            {typeof value === "boolean"
-              ? value.toString().toUpperCase()
-              : Array.isArray(value)
-              ? value
-                  .reduce((acc, cv) => {
-                    // Check if the current value is an object
-                    const cvStr = typeof cv === "object" ? JSON.stringify(cv) : cv;
-                    // Concatenate the current value to the accumulator, ensuring it's a string
-                    return acc + ", " + cvStr;
-                  }, "")
-                  .substring(2) // Remove the leading comma and space
-              : typeof value === "object"
-              ? JSON.stringify(value)
-              : value}
-          </div>
-        ) : null
-      );
-  }
-
-  function deleteHandler(id: string) {
-    const pathnames = pathname.split("/");
-    const resourceType = pathnames[pathnames.length - 1];
-    const resourceName = resourceType === "builder" ? "build" : resourceType.substring(0, resourceType.length - 1);
-    if (confirm(`Are you sure you want to delete this ${resourceName}?`)) {
-      setLoading(true);
-      remove && remove(id, setLoading);
-    }
-  }
+  // ... other existing code ...
 
   return (
-    <div className={`d-flex gap-2 justify-content-between p-3 border bg-white`}>
+    <div className="container-fluid p-3 bg-white">
       {isLoading && <Loader />}
 
       {!isLoading && (!data || data.length === 0) && <NoData message={message} />}
 
-      {!isLoading &&
-        data?.map(item => (
-          <div style={{ width: "25%", height: "130px",borderRadius:"5px" }} className={`px-4 gap-2 ${styles.bgYellow}`} key={item.id}>
-            <div className="d-flex justify-content-between pb-2" style={{ paddingTop: "0.75rem" }}>
-              <span className="pt-3 pb-2">
-                <span>
-                  <span className="text-danger fw-bold">Name: </span>
-                  <span>{item.name || item.id}</span>
-                </span>
-                {(item["status"] || item["live_status"]) && (
-                  <Pill
-                    className="ms-2"
-                    type={statusType[item["status"]] || statusType[item["live_status"]]}
-                    label={statusLabel[item["status"]] || statusLabel[item["live_status"]]}
-                  />
-                )}
-              </span>
-              <span className="d-inline-flex gap-2 pt-3 pb-2">
-                {item["status"] && statusChange && (
-                  <i
-                    className={`pointer bi bi-${
-                      item["status"] === "Ready" || item["status"] === "Complete"
-                        ? "stop-fill text-danger"
-                        : item["status"] === "Not Ready" || item["status"] === "Failed"
-                        ? "play-fill text-success"
-                        : "play-fill text-muted"
-                    }`}
-                    title={
-                      item["status"] === "Ready" || item["status"] === "Complete"
-                        ? "Stop"
-                        : item["status"] === "Not Ready" || item["status"] === "Failed"
-                        ? "Start"
-                        : "Disabled"
-                    }
-                    onClick={() =>
-                      (item["status"] === "Ready" ||
-                        item["status"] === "Complete" ||
-                        item["status"] === "Not Ready" ||
-                        item["status"] === "Failed") &&
-                      statusChange(item.id, item["status"])
-                    }
-                    style={{
-                      pointerEvents:
-                        item["status"] === "Provisioning" ||
-                        item["status"] === "Progressing" ||
-                        item["status"] === "Starting" ||
-                        item["status"] === "Stopping"
-                          ? "none"
-                          : "auto"
-                    }}
-                  ></i>
-                )}
-                {Object.keys(item).length > 2 && (
-                  <i
-                    className={`pointer bi bi-chevron-${activeItem === item.id ? "up" : "down"} text-danger fs-5`}
-                    onClick={() => showDetails(item.id)}
-                  ></i>
-                )}
-              </span>
-            </div>
-
-            {activeItem === item.id && <hr className="mt-0" />}
-
-            {activeItem === item.id && (
-              <div className="row mb-3 px-4">
-                <div className="col-5">{renderItem(item)}</div>
-
-                <div className="col-7">
-                  {remove && (
-                    <button
-                      type="button"
-                      className={`btn btn-danger py-2 float-end ${styles.button}
-                      ${item?.["operation_status"] === "IN-PROGRESS" ? `pe-none opacity-25` : ""}`}
-                      disabled={
-                        item["operation_name"]?.toUpperCase() === "DELETION" ||
-                        !(isLead || item?.["created_by"] !== user?.email)
-                      }
-                      onClick={() => deleteHandler(item.id)}
-                    >
-                      {loading && <CircularProgress color="inherit" style={{ width: "24px", height: "24px" }} />}
-                      {!loading && "Delete"}
-                    </button>
-                  )}
-
-                  {update && item?.["created_by"] === user?.email && (
-                    <Link
-                      className={`btn btn-teal py-2 me-2 float-end ${styles.button} ${styles.updateButton}
-                      ${item?.["operation_status"] === "IN-PROGRESS" ? `pe-none opacity-25` : ""}`}
-                      to={`${pathname}/${item.id}/update`}
-                    >
-                      Update
-                    </Link>
-                  )}
-
-                  {build && (
-                    <button
-                      className={`btn btn-teal py-2 me-2 float-end ${styles.button}  ${styles.updateButton}`}
-                      onClick={() => build(item.id)}
-                    >
-                      Update
-                    </button>
-                  )}
-
-                  {details && (
-                    <Link
-                      className={`btn btn-secondary py-2 me-2 float-end ${styles.button}
-                      ${item?.["operation_status"] === "IN-PROGRESS" ? `pe-none opacity-25` : ""}`}
-                      to={`${pathname}/${item.id}`}
-                    >
-                      Details
-                    </Link>
-                  )}
-
-                  {logs && (
-                    <button
-                      className={`btn btn-dark py-2 me-2 float-end ${styles.button}`}
-                      onClick={() => logs(item.id, "logs")}
-                    >
-                      Logs
-                    </button>
-                  )}
-
-                  {schedule && (
-                    <button
-                      className={`btn btn-primary py-2 me-2 float-end ${styles.button}
-                      ${item?.["operation_status"] === "IN-PROGRESS" ? `pe-none opacity-25` : ""}`}
-                      onClick={() => schedule(item as Workspace)}
-                      title="Schedule Workspace Shutdown/Sleep"
-                    >
-                      Schedule
-                    </button>
-                  )}
-
-                  {share && item?.["created_by"] === user?.email && (
-                    <button
-                      className={`btn btn-info py-2 me-2 float-end ${styles.button}`}
-                      onClick={() => share(item.id)}
-                    >
-                      Share
-                    </button>
-                  )}
+      {!isLoading && (
+        <div className="row g-3">
+          {data?.map(item => (
+            <div className="col-12 col-sm-6 col-md-4 col-lg-3" key={item.id}>
+              <div className={`h-100 p-3 ${styles.bgYellow}`} style={{ borderRadius: "5px" }}>
+                <div className="d-flex justify-content-between pb-2" style={{ paddingTop: "0.75rem" }}>
+                  <span className="pt-3 pb-2">
+                    <span>
+                      <span className="text-danger fw-bold">Name: </span>
+                      <span>{item.name || item.id}</span>
+                    </span>
+                    {(item["status"] || item["live_status"]) && (
+                      <Pill
+                        className="ms-2"
+                        type={statusType[item["status"]] || statusType[item["live_status"]]}
+                        label={statusLabel[item["status"]] || statusLabel[item["live_status"]]}
+                      />
+                    )}
+                  </span>
+                  <span className="d-inline-flex gap-2 pt-3 pb-2">
+                    {/* ... your existing icon buttons ... */}
+                  </span>
                 </div>
+
+                {activeItem === item.id && <hr className="mt-0" />}
+
+                {activeItem === item.id && (
+                  <div className="mb-3">
+                    <div className="mb-2">{renderItem(item)}</div>
+
+                    <div className="d-flex flex-wrap gap-2 justify-content-end">
+                      {/* ... your existing action buttons ... */}
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        ))}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
-
-export default CardBuild;
